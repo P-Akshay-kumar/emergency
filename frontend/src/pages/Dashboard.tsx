@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useSocket } from "../lib/socket";
 import { useAuthStore } from "../store/auth";
-import type { Incident, IncidentSeverity, IncidentStatus } from "../types";
+import type { Incident, IncidentSeverity, IncidentStatus, Event } from "../types";
 
 const SEVERITY_STYLES: Record<IncidentSeverity, string> = {
   LOW: "border-l-severity-low",
@@ -24,13 +24,17 @@ export default function Dashboard() {
   const { socket, connected } = useSocket();
 
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [showIncidentForm, setShowIncidentForm] = useState(false);
+  const [showEventForm, setShowEventForm] = useState(false);
 
   useEffect(() => {
-    api
-      .get("/incidents")
-      .then((res) => setIncidents(res.data))
+    Promise.all([api.get("/incidents"), api.get("/events")])
+      .then(([incidentsRes, eventsRes]) => {
+        setIncidents(incidentsRes.data);
+        setEvents(eventsRes.data);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -38,7 +42,8 @@ export default function Dashboard() {
   // refresh-to-see-anything dashboards.
   useEffect(() => {
     if (!socket) return;
-const onCreated = (incident: Incident) =>
+
+    const onCreated = (incident: Incident) =>
       setIncidents((prev) =>
         prev.some((i) => i.id === incident.id) ? prev : [incident, ...prev]
       );
@@ -55,7 +60,8 @@ const onCreated = (incident: Incident) =>
     };
   }, [socket]);
 
-  const canManage = user?.role === "ADMIN" || user?.role === "STAFF";
+  const isAdmin = user?.role === "ADMIN";
+  const canManage = isAdmin || user?.role === "STAFF";
 
   async function updateStatus(id: string, status: IncidentStatus) {
     await api.patch(`/incidents/${id}/status`, { status });
@@ -87,18 +93,51 @@ const onCreated = (incident: Incident) =>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-8">
+        {isAdmin && (
+          <div className="mb-8 pb-8 border-b border-base-800">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-mono uppercase tracking-wide text-base-400">
+                Events ({events.length})
+              </h2>
+              <button
+                onClick={() => setShowEventForm((v) => !v)}
+                className="rounded-md border border-base-700 px-3 py-1.5 text-xs font-medium text-base-200 hover:bg-base-800 transition"
+              >
+                {showEventForm ? "Cancel" : "+ New event"}
+              </button>
+            </div>
+            {showEventForm && (
+              <EventForm
+                onCreated={(event) => {
+                  setEvents((prev) => [...prev, event]);
+                  setShowEventForm(false);
+                }}
+              />
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-semibold text-base-50">Incidents</h1>
           <button
-            onClick={() => setShowForm((v) => !v)}
-            className="rounded-md bg-severity-high px-4 py-2 text-sm font-medium text-base-950 hover:opacity-90 transition"
+            onClick={() => setShowIncidentForm((v) => !v)}
+            disabled={events.length === 0}
+            className="rounded-md bg-severity-high px-4 py-2 text-sm font-medium text-base-950 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
-            {showForm ? "Cancel" : "Report incident"}
+            {showIncidentForm ? "Cancel" : "Report incident"}
           </button>
         </div>
 
-        {showForm && (
-          <ReportForm onCreated={() => setShowForm(false)} />
+        {events.length === 0 && (
+          <p className="text-sm text-base-400 mb-6">
+            {isAdmin
+              ? "Create an event above before incidents can be reported against it."
+              : "No events exist yet — an admin needs to create one before incidents can be reported."}
+          </p>
+        )}
+
+        {showIncidentForm && (
+          <ReportForm events={events} onCreated={() => setShowIncidentForm(false)} />
         )}
 
         {loading ? (
@@ -146,8 +185,100 @@ const onCreated = (incident: Incident) =>
   );
 }
 
-function ReportForm({ onCreated }: { onCreated: () => void }) {
-  const [eventId, setEventId] = useState("");
+function EventForm({ onCreated }: { onCreated: (event: Event) => void }) {
+  const [name, setName] = useState("");
+  const [venue, setVenue] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await api.post("/events", {
+        name,
+        venue,
+        startsAt: new Date(startsAt).toISOString(),
+        endsAt: new Date(endsAt).toISOString(),
+      });
+      onCreated(res.data);
+    } catch (err: any) {
+      setError(
+        err.response?.data?.error
+          ? JSON.stringify(err.response.data.error)
+          : "Failed to create event."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-md border border-base-800 bg-base-900 p-4 space-y-3"
+    >
+      <input
+        placeholder="Event name"
+        required
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50"
+      />
+      <input
+        placeholder="Venue"
+        required
+        value={venue}
+        onChange={(e) => setVenue(e.target.value)}
+        className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50"
+      />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-base-400 mb-1">Starts</label>
+          <input
+            type="datetime-local"
+            required
+            value={startsAt}
+            onChange={(e) => setStartsAt(e.target.value)}
+            className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-base-400 mb-1">Ends</label>
+          <input
+            type="datetime-local"
+            required
+            value={endsAt}
+            onChange={(e) => setEndsAt(e.target.value)}
+            className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50"
+          />
+        </div>
+      </div>
+
+      {error && <p className="text-sm text-severity-critical">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="rounded-md bg-severity-low px-4 py-2 text-sm font-medium text-base-950 hover:opacity-90 disabled:opacity-50"
+      >
+        {submitting ? "Creating…" : "Create event"}
+      </button>
+    </form>
+  );
+}
+
+function ReportForm({
+  events,
+  onCreated,
+}: {
+  events: Event[];
+  onCreated: () => void;
+}) {
+  const [eventId, setEventId] = useState(events[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState<IncidentSeverity>("MEDIUM");
@@ -173,17 +304,18 @@ function ReportForm({ onCreated }: { onCreated: () => void }) {
       onSubmit={handleSubmit}
       className="mb-6 rounded-md border border-base-800 bg-base-900 p-4 space-y-3"
     >
-      <p className="text-xs text-base-400">
-        Event ID is required until the events list is built — copy one from the
-        database for now.
-      </p>
-      <input
-        placeholder="Event ID"
+      <select
         required
         value={eventId}
         onChange={(e) => setEventId(e.target.value)}
-        className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50 font-mono"
-      />
+        className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50"
+      >
+        {events.map((event) => (
+          <option key={event.id} value={event.id}>
+            {event.name} — {event.venue}
+          </option>
+        ))}
+      </select>
       <input
         placeholder="Title"
         required

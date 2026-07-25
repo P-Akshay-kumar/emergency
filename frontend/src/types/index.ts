@@ -30,3 +30,11 @@ export interface AppNotification {
   isAcknowledged: boolean;
   createdAt: string;
 }
+
+export interface Event {
+  id: string;
+  name: string;
+  venue: string;
+  startsAt: string;
+  endsAt: string;
+}

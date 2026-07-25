@@ -43,10 +43,12 @@ router.post("/", async (req, res) => {
     include: { reportedBy: { select: { name: true } } },
   });
 
-  // This replaces the old app's behavior of a staff member having to refresh
-  // the dashboard to see new incidents — ADMIN and STAFF get it pushed live.
+  // ADMIN and STAFF dashboards get it pushed live — but the reporter (often
+  // an ATTENDEE, who isn't in either of those broadcast rooms) also needs to
+  // see their own report land without a page refresh.
   broadcastToRoles(["ADMIN", "STAFF"], "incident:created", incident);
   notifyUser(incident.reportedById, "incident:created", incident);
+
   res.status(201).json(incident);
 });
 

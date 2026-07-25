@@ -6,6 +6,7 @@ import { initSockets } from "./sockets";
 import authRoutes from "./routes/auth.routes";
 import incidentRoutes from "./routes/incidents.routes";
 import notificationRoutes from "./routes/notifications.routes";
+import eventRoutes from "./routes/events.routes";
 
 const app = express();
 const httpServer = createServer(app);
@@ -20,6 +21,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/events", eventRoutes);
 
 initSockets(httpServer);
 
