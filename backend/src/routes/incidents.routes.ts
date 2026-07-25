@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { broadcastToRoles, notifyUser } from "../sockets";
@@ -23,9 +24,22 @@ router.post("/", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten().fieldErrors });
   }
+  const { eventId, title, description, severity, latitude, longitude } = parsed.data;
 
+  // Built explicitly rather than spread: Zod's .optional() produces
+  // `number | undefined`, but with exactOptionalPropertyTypes Prisma wants
+  // either a present `number | null` or the key omitted entirely — never an
+  // explicit `undefined`. Coercing to null sidesteps that mismatch.
   const incident = await prisma.incident.create({
-    data: { ...parsed.data, reportedById: req.user!.userId },
+    data: {
+      eventId,
+      title,
+      description,
+      severity,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      reportedById: req.user!.userId,
+    },
     include: { reportedBy: { select: { name: true } } },
   });
 
@@ -39,11 +53,18 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   const { status, eventId } = req.query;
 
+  // Built up conditionally instead of setting keys to `undefined` — same
+  // exactOptionalPropertyTypes issue as above, this time on a query filter.
+  const where: Prisma.IncidentWhereInput = {};
+  if (typeof status === "string") {
+    where.status = status as Prisma.EnumIncidentStatusFilter["equals"];
+  }
+  if (typeof eventId === "string") {
+    where.eventId = eventId;
+  }
+
   const incidents = await prisma.incident.findMany({
-    where: {
-      status: typeof status === "string" ? (status as any) : undefined,
-      eventId: typeof eventId === "string" ? eventId : undefined,
-    },
+    where,
     include: {
       reportedBy: { select: { name: true } },
       assignments: { include: { staff: { include: { user: { select: { name: true } } } } } },
@@ -65,9 +86,14 @@ router.patch("/:id/status", requireRole("ADMIN", "STAFF"), async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten().fieldErrors });
   }
+  const rawId = req.params.id;
+  const incidentId = Array.isArray(rawId) ? rawId[0] : rawId;
+  if (!incidentId) {
+    return res.status(400).json({ error: "Missing incident id" });
+  }
 
   const incident = await prisma.incident.update({
-    where: { id: req.params.id },
+    where: { id: incidentId },
     data: {
       status: parsed.data.status,
       resolvedAt: parsed.data.status === "RESOLVED" ? new Date() : null,
@@ -97,9 +123,14 @@ router.post("/:id/assign", requireRole("ADMIN"), async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten().fieldErrors });
   }
+  const rawId = req.params.id;
+  const incidentId = Array.isArray(rawId) ? rawId[0] : rawId;
+  if (!incidentId) {
+    return res.status(400).json({ error: "Missing incident id" });
+  }
 
   const assignment = await prisma.staffAssignment.create({
-    data: { incidentId: req.params.id, staffId: parsed.data.staffId },
+    data: { incidentId, staffId: parsed.data.staffId },
     include: { staff: { include: { user: true } }, incident: true },
   });
 

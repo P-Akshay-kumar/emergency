@@ -17,8 +17,14 @@ router.get("/", async (req, res) => {
 });
 
 router.patch("/:id/acknowledge", async (req, res) => {
+  const rawId = req.params.id;
+  const notificationId = Array.isArray(rawId) ? rawId[0] : rawId;
+  if (!notificationId) {
+    return res.status(400).json({ error: "Missing notification id" });
+  }
+
   const notification = await prisma.emergencyNotification.findUnique({
-    where: { id: req.params.id },
+    where: { id: notificationId },
   });
 
   if (!notification || notification.userId !== req.user!.userId) {
@@ -26,7 +32,7 @@ router.patch("/:id/acknowledge", async (req, res) => {
   }
 
   const updated = await prisma.emergencyNotification.update({
-    where: { id: req.params.id },
+    where: { id: notificationId },
     data: { isAcknowledged: true },
   });
 
