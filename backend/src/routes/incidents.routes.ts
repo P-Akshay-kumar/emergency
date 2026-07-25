@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, IncidentStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { broadcastToRoles, notifyUser } from "../sockets";
@@ -56,8 +56,9 @@ router.get("/", async (req, res) => {
   // Built up conditionally instead of setting keys to `undefined` — same
   // exactOptionalPropertyTypes issue as above, this time on a query filter.
   const where: Prisma.IncidentWhereInput = {};
-  if (typeof status === "string") {
-    where.status = status as Prisma.EnumIncidentStatusFilter["equals"];
+  const validStatuses: IncidentStatus[] = ["REPORTED", "ACKNOWLEDGED", "IN_PROGRESS", "RESOLVED"];
+  if (typeof status === "string" && validStatuses.includes(status as IncidentStatus)) {
+    where.status = status as IncidentStatus;
   }
   if (typeof eventId === "string") {
     where.eventId = eventId;
