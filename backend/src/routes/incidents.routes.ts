@@ -46,7 +46,7 @@ router.post("/", async (req, res) => {
   // This replaces the old app's behavior of a staff member having to refresh
   // the dashboard to see new incidents — ADMIN and STAFF get it pushed live.
   broadcastToRoles(["ADMIN", "STAFF"], "incident:created", incident);
-
+  notifyUser(incident.reportedById, "incident:created", incident);
   res.status(201).json(incident);
 });
 

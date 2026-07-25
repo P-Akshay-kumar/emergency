@@ -38,9 +38,10 @@ export default function Dashboard() {
   // refresh-to-see-anything dashboards.
   useEffect(() => {
     if (!socket) return;
-
-    const onCreated = (incident: Incident) =>
-      setIncidents((prev) => [incident, ...prev]);
+const onCreated = (incident: Incident) =>
+      setIncidents((prev) =>
+        prev.some((i) => i.id === incident.id) ? prev : [incident, ...prev]
+      );
 
     const onUpdated = (incident: Incident) =>
       setIncidents((prev) => prev.map((i) => (i.id === incident.id ? incident : i)));
