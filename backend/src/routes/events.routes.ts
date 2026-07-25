@@ -15,14 +15,22 @@ router.get("/", async (_req, res) => {
   res.json(events);
 });
 
-const createEventSchema = z.object({
-  name: z.string().min(2),
-  venue: z.string().min(2),
-  startsAt: z.string().datetime(),
-  endsAt: z.string().datetime(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-});
+const createEventSchema = z
+  .object({
+    name: z.string().min(2),
+    venue: z.string().min(2),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+  })
+  // Zod validates each field's shape independently — it doesn't check
+  // fields against each other unless told to. This is what let an event
+  // end before it starts.
+  .refine((data) => new Date(data.endsAt) > new Date(data.startsAt), {
+    message: "Event end time must be after the start time",
+    path: ["endsAt"],
+  });
 
 // Only admins create events — staff and attendees join/report against
 // events that already exist.

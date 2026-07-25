@@ -196,6 +196,14 @@ function EventForm({ onCreated }: { onCreated: (event: Event) => void }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Same check the backend enforces — catching it here means an obviously
+    // wrong date pair doesn't need a round trip to the server to reject.
+    if (new Date(endsAt) <= new Date(startsAt)) {
+      setError("End time must be after the start time.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await api.post("/events", {

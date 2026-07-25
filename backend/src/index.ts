@@ -1,7 +1,8 @@
 import "dotenv/config";
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import { createServer } from "http";
+import { Prisma } from "@prisma/client";
 import { initSockets } from "./sockets";
 import authRoutes from "./routes/auth.routes";
 import incidentRoutes from "./routes/incidents.routes";
@@ -22,6 +23,27 @@ app.use("/api/auth", authRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/events", eventRoutes);
+
+// Without this, an unhandled error (e.g. a foreign key that doesn't exist)
+// falls through to Express's default handler, which returns HTML — the
+// frontend then has nothing usable in `err.response.data.error` and falls
+// back to a generic "Failed to..." message with no real detail. This maps
+// the Prisma error codes actually likely to occur into readable JSON.
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === "P2003") {
+      return res.status(400).json({ error: "Referenced record does not exist (invalid id)" });
+    }
+    if (err.code === "P2002") {
+      return res.status(409).json({ error: "A record with that value already exists" });
+    }
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: "Record not found" });
+    }
+  }
+  console.error(err);
+  res.status(500).json({ error: "Something went wrong on the server" });
+});
 
 initSockets(httpServer);
 
