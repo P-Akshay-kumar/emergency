@@ -185,6 +185,16 @@ export default function Dashboard() {
   );
 }
 
+// Formats a Date as the local "YYYY-MM-DDTHH:mm" string datetime-local
+// inputs expect — used to set the earliest pickable start time in the UI
+// itself, not just to validate after the fact.
+function toDatetimeLocal(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const MIN_LEAD_TIME_MS = 24 * 60 * 60 * 1000;
+
 function EventForm({ onCreated }: { onCreated: (event: Event) => void }) {
   const [name, setName] = useState("");
   const [venue, setVenue] = useState("");
@@ -193,12 +203,18 @@ function EventForm({ onCreated }: { onCreated: (event: Event) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const minStart = toDatetimeLocal(new Date(Date.now() + MIN_LEAD_TIME_MS));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    // Same check the backend enforces — catching it here means an obviously
-    // wrong date pair doesn't need a round trip to the server to reject.
+    // Same checks the backend enforces — catching them here means an
+    // obviously invalid submission doesn't need a round trip to reject.
+    if (new Date(startsAt).getTime() - Date.now() < MIN_LEAD_TIME_MS) {
+      setError("Event must be created at least 24 hours before it starts.");
+      return;
+    }
     if (new Date(endsAt) <= new Date(startsAt)) {
       setError("End time must be after the start time.");
       return;
@@ -229,6 +245,9 @@ function EventForm({ onCreated }: { onCreated: (event: Event) => void }) {
       onSubmit={handleSubmit}
       className="rounded-md border border-base-800 bg-base-900 p-4 space-y-3"
     >
+      <p className="text-xs text-base-400">
+        Events must be created at least 24 hours before they start.
+      </p>
       <input
         placeholder="Event name"
         required
@@ -249,6 +268,7 @@ function EventForm({ onCreated }: { onCreated: (event: Event) => void }) {
           <input
             type="datetime-local"
             required
+            min={minStart}
             value={startsAt}
             onChange={(e) => setStartsAt(e.target.value)}
             className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50"
@@ -259,6 +279,7 @@ function EventForm({ onCreated }: { onCreated: (event: Event) => void }) {
           <input
             type="datetime-local"
             required
+            min={startsAt || minStart}
             value={endsAt}
             onChange={(e) => setEndsAt(e.target.value)}
             className="w-full rounded-md border border-base-700 bg-base-800 px-3 py-2 text-sm text-base-50"
