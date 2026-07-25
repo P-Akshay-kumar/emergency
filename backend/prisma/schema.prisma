@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  ATTENDEE
+}
+
+enum IncidentStatus {
+  REPORTED
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  name              String
+  role              Role     @default(ATTENDEE)
+  createdAt         DateTime @default(now())
+
+  reportedIncidents Incident[]        @relation("ReportedBy")
+  staffProfile      EmergencyStaff?
+  registrations     EventRegistration[]
+  notifications     EmergencyNotification[]
+}
+
+model Event {
+  id            String   @id @default(cuid())
+  name          String
+  venue         String
+  startsAt      DateTime
+  endsAt        DateTime
+  latitude      Float?
+  longitude     Float?
+  createdAt     DateTime @default(now())
+
+  incidents     Incident[]
+  routes        EvacuationRoute[]
+  registrations EventRegistration[]
+}
+
+model EventRegistration {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+}
+
+model EmergencyStaff {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  specialty    String
+  isAvailable  Boolean  @default(true)
+
+  user        User               @relation(fields: [userId], references: [id])
+  assignments StaffAssignment[]
+}
+
+model Incident {
+  id           String            @id @default(cuid())
+  eventId      String
+  reportedById String
+  title        String
+  description  String
+  status       IncidentStatus    @default(REPORTED)
+  severity     IncidentSeverity  @default(MEDIUM)
+  latitude     Float?
+  longitude    Float?
+  createdAt    DateTime          @default(now())
+  resolvedAt   DateTime?
+
+  event        Event              @relation(fields: [eventId], references: [id])
+  reportedBy   User               @relation("ReportedBy", fields: [reportedById], references: [id])
+  assignments  StaffAssignment[]
+  alerts       Alert[]
+}
+
+model StaffAssignment {
+  id         String   @id @default(cuid())
+  incidentId String
+  staffId    String
+  assignedAt DateTime @default(now())
+
+  incident Incident       @relation(fields: [incidentId], references: [id])
+  staff    EmergencyStaff @relation(fields: [staffId], references: [id])
+
+  @@unique([incidentId, staffId])
+}
+
+model EvacuationRoute {
+  id           String   @id @default(cuid())
+  eventId      String
+  gateName     String
+  capacity     Int
+  latitude     Float
+  longitude    Float
+  isOpen       Boolean  @default(true)
+
+  event Event @relation(fields: [eventId], references: [id])
+}
+
+model Alert {
+  id         String        @id @default(cuid())
+  incidentId String?
+  message    String
+  severity   AlertSeverity @default(INFO)
+  createdAt  DateTime      @default(now())
+
+  incident Incident? @relation(fields: [incidentId], references: [id])
+}
+
+// This was referenced in the old Flask routes.py but never defined in models.py —
+// the notification feature was dead code. Implementing it properly here.
+model EmergencyNotification {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
+  message      String
+  isAcknowledged Boolean @default(false)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
