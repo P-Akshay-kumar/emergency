@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/*
+  Design direction: an operations-console aesthetic, not a consumer SaaS
+  dashboard. Real dispatch/NOC displays run dark to reduce eye strain across
+  long monitoring shifts, and lean on a strict severity color scale rather
+  than decorative color — that's the actual job this UI has to do, so the
+  palette is built around it instead of a generic brand accent.
+*/
+@theme {
+  --font-display: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  /* Base surfaces — deep blue-charcoal, not pure black, so panels can
+     separate from the page without pure white borders */
+  --color-base-950: #0a0e14;
+  --color-base-900: #10151d;
+  --color-base-800: #171d27;
+  --color-base-700: #232a36;
+  --color-base-600: #333c4a;
+  --color-base-400: #8b96a5;
+  --color-base-200: #d3d9e0;
+  --color-base-50: #f4f6f8;
+
+  /* Severity scale — the signature system of the whole UI */
+  --color-severity-low: #4d8fd6;
+  --color-severity-medium: #e0a72e;
+  --color-severity-high: #e0722e;
+  --color-severity-critical: #dc4545;
+
+  /* Signal accent — used sparingly for "live" / connected state, distinct
+     from severity colors so the two meanings never collide */
+  --color-signal: #3ddc97;
+}
+
+body {
+  background: var(--color-base-950);
+  color: var(--color-base-200);
+  font-family: var(--font-display);
+}
+
+/* Respect reduced-motion preferences for the live-pulse indicator */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
