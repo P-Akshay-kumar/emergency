@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { useSocket } from "../lib/socket";
 import { useAuthStore } from "../store/auth";
 import NotificationBell from "../components/NotificationBell";
+import StatsOverview from "../components/StatsOverview";
 import type { Incident, IncidentSeverity, IncidentStatus, Event, StaffMember } from "../types";
 
 const SEVERITY_STYLES: Record<IncidentSeverity, string> = {
@@ -146,6 +147,8 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        <StatsOverview incidents={incidents} staff={staff} showStaff={isAdmin} />
 
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-semibold text-base-50">Incidents</h1>
