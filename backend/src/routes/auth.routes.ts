@@ -7,8 +7,11 @@ import { signToken } from "../lib/jwt";
 const router = Router();
 
 const registerSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
+  name: z.string().trim().min(2, "Name must be at least 2 characters"),
+  // Postgres's unique constraint on email is case-sensitive by default —
+  // without normalizing here, "User@Test.com" and "user@test.com" would be
+  // treated as two different accounts.
+  email: z.string().email("Invalid email address").transform((v) => v.trim().toLowerCase()),
   password: z.string().min(8, "Password must be at least 8 characters"),
   // Deliberately not accepting ADMIN here — admin accounts should be created
   // by an existing admin, never through open self-registration.
@@ -47,7 +50,7 @@ router.post("/register", async (req, res) => {
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().transform((v) => v.trim().toLowerCase()),
   password: z.string().min(1, "Password is required"),
 });
 

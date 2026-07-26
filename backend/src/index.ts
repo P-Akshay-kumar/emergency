@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 import { createServer } from "http";
 import { Prisma } from "@prisma/client";
 import { initSockets } from "./sockets";
@@ -13,14 +15,27 @@ import staffRoutes from "./routes/staff.routes";
 const app = express();
 const httpServer = createServer(app);
 
+app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: "50kb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.use("/api/auth", authRoutes);
+// Auth routes are the actual brute-force target in this app — someone
+// could otherwise script thousands of login/password guesses per minute.
+// A generous window (not applied to the rest of the API) keeps normal use
+// unaffected while still shutting down that specific attack shape.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Try again in a few minutes." },
+});
+
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/events", eventRoutes);
