@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.routes";
 import incidentRoutes from "./routes/incidents.routes";
 import notificationRoutes from "./routes/notifications.routes";
 import eventRoutes from "./routes/events.routes";
+import staffRoutes from "./routes/staff.routes";
 
 const app = express();
 const httpServer = createServer(app);
@@ -23,6 +24,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/events", eventRoutes);
+app.use("/api/staff", staffRoutes);
 
 // Without this, an unhandled error (e.g. a foreign key that doesn't exist)
 // falls through to Express's default handler, which returns HTML — the

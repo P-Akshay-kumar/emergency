@@ -21,6 +21,7 @@ export interface Incident {
   createdAt: string;
   resolvedAt: string | null;
   reportedBy?: { name: string };
+  assignments?: { staff: { user: { name: string } } }[];
 }
 
 export interface AppNotification {
@@ -37,4 +38,11 @@ export interface Event {
   venue: string;
   startsAt: string;
   endsAt: string;
+}
+
+export interface StaffMember {
+  id: string;
+  specialty: string;
+  isAvailable: boolean;
+  user: { name: string; email: string };
 }

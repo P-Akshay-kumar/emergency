@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { useSocket } from "../lib/socket";
 import { useAuthStore } from "../store/auth";
 import NotificationBell from "../components/NotificationBell";
-import type { Incident, IncidentSeverity, IncidentStatus, Event } from "../types";
+import type { Incident, IncidentSeverity, IncidentStatus, Event, StaffMember } from "../types";
 
 const SEVERITY_STYLES: Record<IncidentSeverity, string> = {
   LOW: "border-l-severity-low",
@@ -26,18 +26,25 @@ export default function Dashboard() {
 
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
 
+  const isAdmin = user?.role === "ADMIN";
+
   useEffect(() => {
-    Promise.all([api.get("/incidents"), api.get("/events")])
-      .then(([incidentsRes, eventsRes]) => {
+    const requests = [api.get("/incidents"), api.get("/events")];
+    if (isAdmin) requests.push(api.get("/staff"));
+
+    Promise.all(requests)
+      .then(([incidentsRes, eventsRes, staffRes]) => {
         setIncidents(incidentsRes.data);
         setEvents(eventsRes.data);
+        if (staffRes) setStaff(staffRes.data);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin]);
 
   // Live updates — this is the actual upgrade over the old app's
   // refresh-to-see-anything dashboards.
@@ -52,20 +59,41 @@ export default function Dashboard() {
     const onUpdated = (incident: Incident) =>
       setIncidents((prev) => prev.map((i) => (i.id === incident.id ? incident : i)));
 
+    // The assign endpoint broadcasts the StaffAssignment record, not a full
+    // Incident — so this appends to the matching incident's assignment list
+    // rather than replacing the whole incident.
+    const onAssigned = (assignment: {
+      incidentId: string;
+      staff: { user: { name: string } };
+    }) =>
+      setIncidents((prev) =>
+        prev.map((i) =>
+          i.id === assignment.incidentId
+            ? { ...i, assignments: [...(i.assignments ?? []), { staff: assignment.staff }] }
+            : i
+        )
+      );
+
     socket.on("incident:created", onCreated);
     socket.on("incident:updated", onUpdated);
+    socket.on("incident:assigned", onAssigned);
 
     return () => {
       socket.off("incident:created", onCreated);
       socket.off("incident:updated", onUpdated);
+      socket.off("incident:assigned", onAssigned);
     };
   }, [socket]);
 
-  const isAdmin = user?.role === "ADMIN";
   const canManage = isAdmin || user?.role === "STAFF";
 
   async function updateStatus(id: string, status: IncidentStatus) {
     await api.patch(`/incidents/${id}/status`, { status });
+  }
+
+  async function assignStaff(incidentId: string, staffId: string) {
+    if (!staffId) return;
+    await api.post(`/incidents/${incidentId}/assign`, { staffId });
   }
 
   return (
@@ -160,23 +188,52 @@ export default function Dashboard() {
                     <p className="text-xs font-mono text-base-600 mt-2">
                       {STATUS_LABELS[incident.status]} · reported by{" "}
                       {incident.reportedBy?.name ?? "unknown"}
+                      {incident.assignments && incident.assignments.length > 0 && (
+                        <>
+                          {" "}
+                          · assigned to{" "}
+                          {incident.assignments.map((a) => a.staff.user.name).join(", ")}
+                        </>
+                      )}
                     </p>
                   </div>
-                  {canManage && incident.status !== "RESOLVED" && (
-                    <select
-                      value={incident.status}
-                      onChange={(e) =>
-                        updateStatus(incident.id, e.target.value as IncidentStatus)
-                      }
-                      className="text-xs font-mono rounded border border-base-700 bg-base-800 text-base-200 px-2 py-1"
-                    >
-                      {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
+                  <div className="flex flex-col items-end gap-1.5">
+                    {canManage && incident.status !== "RESOLVED" && (
+                      <select
+                        value={incident.status}
+                        onChange={(e) =>
+                          updateStatus(incident.id, e.target.value as IncidentStatus)
+                        }
+                        className="text-xs font-mono rounded border border-base-700 bg-base-800 text-base-200 px-2 py-1"
+                      >
+                        {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {isAdmin && incident.status !== "RESOLVED" && staff.length > 0 && (
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          assignStaff(incident.id, e.target.value);
+                          e.target.value = "";
+                        }}
+                        className="text-xs font-mono rounded border border-base-700 bg-base-800 text-base-200 px-2 py-1"
+                      >
+                        <option value="" disabled>
+                          Assign staff…
                         </option>
-                      ))}
-                    </select>
-                  )}
+                        {staff.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.user.name}
+                            {s.isAvailable ? "" : " (unavailable)"}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </div>
               </li>
             ))}
