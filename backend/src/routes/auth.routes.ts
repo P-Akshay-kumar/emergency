@@ -1,22 +1,10 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { signToken } from "../lib/jwt";
+import { registerSchema, loginSchema } from "../validation/auth.schema";
 
 const router = Router();
-
-const registerSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters"),
-  // Postgres's unique constraint on email is case-sensitive by default —
-  // without normalizing here, "User@Test.com" and "user@test.com" would be
-  // treated as two different accounts.
-  email: z.string().email("Invalid email address").transform((v) => v.trim().toLowerCase()),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  // Deliberately not accepting ADMIN here — admin accounts should be created
-  // by an existing admin, never through open self-registration.
-  role: z.enum(["STAFF", "ATTENDEE"]).default("ATTENDEE"),
-});
 
 router.post("/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
@@ -47,11 +35,6 @@ router.post("/register", async (req, res) => {
     token,
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
   });
-});
-
-const loginSchema = z.object({
-  email: z.string().email().transform((v) => v.trim().toLowerCase()),
-  password: z.string().min(1, "Password is required"),
 });
 
 router.post("/login", async (req, res) => {

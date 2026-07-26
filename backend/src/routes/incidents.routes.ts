@@ -1,21 +1,16 @@
 import { Router } from "express";
-import { z } from "zod";
 import type { Prisma, IncidentStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { broadcastToRoles, notifyUser } from "../sockets";
+import {
+  reportIncidentSchema,
+  updateStatusSchema,
+  assignStaffSchema,
+} from "../validation/incidents.schema";
 
 const router = Router();
 router.use(requireAuth);
-
-const reportIncidentSchema = z.object({
-  eventId: z.string(),
-  title: z.string().min(3),
-  description: z.string().min(3),
-  severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-});
 
 // Any authenticated role can report an incident — that's the whole point of
 // the platform (an attendee is usually the first person to see a problem).
@@ -78,10 +73,6 @@ router.get("/", async (req, res) => {
   res.json(incidents);
 });
 
-const updateStatusSchema = z.object({
-  status: z.enum(["REPORTED", "ACKNOWLEDGED", "IN_PROGRESS", "RESOLVED"]),
-});
-
 // Only staff/admin can change incident status — an attendee can report but
 // not mark things resolved themselves.
 router.patch("/:id/status", requireRole("ADMIN", "STAFF"), async (req, res) => {
@@ -118,8 +109,6 @@ router.patch("/:id/status", requireRole("ADMIN", "STAFF"), async (req, res) => {
 
   res.json(incident);
 });
-
-const assignStaffSchema = z.object({ staffId: z.string() });
 
 router.post("/:id/assign", requireRole("ADMIN"), async (req, res) => {
   const parsed = assignStaffSchema.safeParse(req.body);
