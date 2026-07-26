@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useSocket } from "../lib/socket";
 import { useAuthStore } from "../store/auth";
+import NotificationBell from "../components/NotificationBell";
 import type { Incident, IncidentSeverity, IncidentStatus, Event } from "../types";
 
 const SEVERITY_STYLES: Record<IncidentSeverity, string> = {
@@ -83,6 +84,7 @@ export default function Dashboard() {
           <span className="text-sm text-base-400">
             {user?.name} · <span className="font-mono text-xs">{user?.role}</span>
           </span>
+          <NotificationBell />
           <button
             onClick={logout}
             className="text-sm text-base-400 hover:text-base-50 transition"
