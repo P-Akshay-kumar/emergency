@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { useSocket } from "../lib/socket";
 import { useAuthStore } from "../store/auth";
@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showIncidentForm, setShowIncidentForm] = useState(false);
+  const [eventFilter, setEventFilter] = useState<string>("ALL");
   const [showEventForm, setShowEventForm] = useState(false);
 
   const isAdmin = user?.role === "ADMIN";
@@ -87,6 +88,19 @@ export default function Dashboard() {
   }, [socket]);
 
   const canManage = isAdmin || user?.role === "STAFF";
+
+  // Filtering client-side, not by re-fetching — the full incident list is
+  // already kept live by the socket listeners above, so re-fetching on
+  // every filter change would mean losing live updates for whichever event
+  // isn't currently selected, and re-subscribing is unnecessary complexity
+  // for data that's already in memory.
+  const visibleIncidents = useMemo(
+    () =>
+      eventFilter === "ALL"
+        ? incidents
+        : incidents.filter((i) => i.eventId === eventFilter),
+    [incidents, eventFilter]
+  );
 
   async function updateStatus(id: string, status: IncidentStatus) {
     await api.patch(`/incidents/${id}/status`, { status });
@@ -148,17 +162,33 @@ export default function Dashboard() {
           </div>
         )}
 
-        <StatsOverview incidents={incidents} staff={staff} showStaff={isAdmin} />
+        <StatsOverview incidents={visibleIncidents} staff={staff} showStaff={isAdmin} />
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4 gap-3">
           <h1 className="text-xl font-semibold text-base-50">Incidents</h1>
-          <button
-            onClick={() => setShowIncidentForm((v) => !v)}
-            disabled={events.length === 0}
-            className="rounded-md bg-severity-high px-4 py-2 text-sm font-medium text-base-950 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition"
-          >
-            {showIncidentForm ? "Cancel" : "Report incident"}
-          </button>
+          <div className="flex items-center gap-3">
+            {events.length > 0 && (
+              <select
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                className="text-sm rounded-md border border-base-700 bg-base-900 text-base-200 px-3 py-2"
+              >
+                <option value="ALL">All events</option>
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={() => setShowIncidentForm((v) => !v)}
+              disabled={events.length === 0}
+              className="rounded-md bg-severity-high px-4 py-2 text-sm font-medium text-base-950 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              {showIncidentForm ? "Cancel" : "Report incident"}
+            </button>
+          </div>
         </div>
 
         {events.length === 0 && (
@@ -175,11 +205,15 @@ export default function Dashboard() {
 
         {loading ? (
           <p className="text-base-400 text-sm">Loading incidents…</p>
-        ) : incidents.length === 0 ? (
-          <p className="text-base-400 text-sm">No incidents reported yet.</p>
+        ) : visibleIncidents.length === 0 ? (
+          <p className="text-base-400 text-sm">
+            {eventFilter === "ALL"
+              ? "No incidents reported yet."
+              : "No incidents reported for this event yet."}
+          </p>
         ) : (
           <ul className="space-y-3">
-            {incidents.map((incident) => (
+            {visibleIncidents.map((incident) => (
               <li
                 key={incident.id}
                 className={`border-l-4 ${SEVERITY_STYLES[incident.severity]} bg-base-900 rounded-r-md px-4 py-3`}
